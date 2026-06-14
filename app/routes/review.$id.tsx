@@ -4,16 +4,14 @@ import path from "path";
 import {
   Form,
   useLoaderData,
-  useNavigate,
 } from "react-router";
 
-import type {
-  Extraction,
-  OutputCircular,
-} from "~/types";
+import type { Extraction } from "~/types";
 
 import { loadReviewData } from "~/utils/circular.server";
 import { buildValidatedCircular } from "~/utils/validation.server";
+
+import HighlightableText from "~/components/HighlightableText";
 
 const VALIDATED_DIR = "data/validated_circulars";
 
@@ -30,8 +28,6 @@ export async function loader({ params }: any) {
 
 /**
  * ACTION
- *
- * This is now the SINGLE source of truth for writing validated_circulars
  */
 export async function action({ request, params }: any) {
   const formData = await request.formData();
@@ -43,14 +39,10 @@ export async function action({ request, params }: any) {
     return Response.redirect("/");
   }
 
-  const { original, extraction } =
-    JSON.parse(
-      formData.get("payload") as string
-    );
+  const { original, extraction } = JSON.parse(
+    formData.get("payload") as string
+  );
 
-  /**
-   * Reconstruct overrides + edited values
-   */
   const overrides: Record<string, boolean> = {};
   const edited: Extraction = {};
 
@@ -65,25 +57,16 @@ export async function action({ request, params }: any) {
     overrides[key] = override === "on";
   }
 
-  /**
-   * Build final validated object
-   */
-  const output: OutputCircular =
-    buildValidatedCircular({
-      original,
-      extraction: edited,
-      overrides,
-    });
+  const output = buildValidatedCircular({
+    original,
+    extraction: edited,
+    overrides,
+  });
 
   await fs.mkdir(VALIDATED_DIR, { recursive: true });
 
-  const outPath = path.join(
-    VALIDATED_DIR,
-    `${id}.json`
-  );
-
   await fs.writeFile(
-    outPath,
+    path.join(VALIDATED_DIR, `${id}.json`),
     JSON.stringify(output, null, 2)
   );
 
@@ -97,27 +80,42 @@ export default function ReviewPage() {
   const { id, original, extraction } =
     useLoaderData<typeof loader>();
 
-  const navigate = useNavigate();
+  /**
+   * Build highlights with live status inference
+   */
+  const highlights = Object.entries(extraction).map(
+    ([key, value]) => {
+      const exists =
+        original.subject.includes(value) ||
+        original.body.includes(value);
+
+      return {
+        key,
+        value,
+        status: exists ? "correct" : "not_present",
+      };
+    }
+  );
 
   return (
     <div style={styles.container}>
-      {/* LEFT PANEL */}
+      {/* LEFT */}
       <div style={styles.leftPane}>
         <h2>{original.subject}</h2>
 
         <h3>Body</h3>
 
-        <pre style={styles.textBox}>
-          {original.body}
-        </pre>
+        <HighlightableText
+          text={original.body}
+          highlights={highlights}
+        />
       </div>
 
-      {/* RIGHT PANEL */}
+      {/* RIGHT */}
       <div style={styles.rightPane}>
         <h3>Extracted Features</h3>
 
         <Form method="post">
-          {/* hidden payload so we keep original/extraction intact */}
           <input
             type="hidden"
             name="payload"
@@ -134,20 +132,18 @@ export default function ReviewPage() {
                   <strong>{key}</strong>
                 </label>
 
-                {/* editable value */}
                 <input
                   name={`field_${key}`}
                   defaultValue={value}
                   style={styles.input}
                 />
 
-                {/* override */}
                 <label style={styles.override}>
                   <input
                     type="checkbox"
                     name={`override_${key}`}
                   />
-                  Override (allow value not in text)
+                  Override
                 </label>
               </div>
             )
@@ -193,14 +189,6 @@ const styles: Record<string, any> = {
     flex: 1,
     padding: 20,
     overflowY: "auto",
-  },
-
-  textBox: {
-    whiteSpace: "pre-wrap",
-    background: "#fafafa",
-    padding: 12,
-    borderRadius: 6,
-    border: "1px solid #eee",
   },
 
   field: {
