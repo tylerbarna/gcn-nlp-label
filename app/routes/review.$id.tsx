@@ -11,7 +11,8 @@ import type { Extraction } from "~/types";
 import { loadReviewData } from "~/utils/circular.server";
 import { buildValidatedCircular } from "~/utils/validation.server";
 
-import HighlightableText from "~/components/HighlightableText";
+import HighlightableText from "~/components/HighlightText";
+import FieldValidationBadge from "~/components/FieldValidationBadge";
 
 const VALIDATED_DIR = "data/validated_circulars";
 
@@ -89,10 +90,12 @@ export default function ReviewPage() {
         original.subject.includes(value) ||
         original.body.includes(value);
 
+      const status = exists ? ("correct" as const) : ("not_present" as const);
+
       return {
         key,
         value,
-        status: exists ? "correct" : "not_present",
+        status,
       };
     }
   );
@@ -129,7 +132,17 @@ export default function ReviewPage() {
             ([key, value]) => (
               <div key={key} style={styles.field}>
                 <label>
-                  <strong>{key}</strong>
+                    <strong>{key}</strong>
+                    {/* compute status for this field */}
+                    {(() => {
+                      const exists =
+                        original.subject.includes(value) ||
+                        original.body.includes(value);
+
+                      const status = exists ? ("correct" as const) : ("not_present" as const);
+
+                      return <FieldValidationBadge status={status} />;
+                    })()}
                 </label>
 
                 <input
